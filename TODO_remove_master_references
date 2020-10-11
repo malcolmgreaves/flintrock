@@ -1,0 +1,219 @@
+./make-release.sh:#   - Dependencies: https://requires.io/github/nchammas/flintrock/requirements/?branch=master
+./tests/conftest.py:    cluster.master_ip = '10.0.0.1'
+./tests/conftest.py:    cluster.master_host = 'master.hostname'
+./tests/conftest.py:    cluster.master_private_host = 'master.privatehostname'
+./tests/test_acceptance.py:        'flintrock', 'run-command', running_cluster, '--master-only', '--',
+./tests/test_acceptance.py:        'flintrock', 'describe', running_cluster, '--master-hostname-only'],
+./tests/test_acceptance.py:    master_address = p.stdout.strip().decode('utf-8')
+./tests/test_acceptance.py:    spark_master_ui = 'http://{m}:8080/json/'.format(m=master_address)
+./tests/test_acceptance.py:        urllib.request.urlopen(spark_master_ui).read().decode('utf-8'))
+./test-infra/README.md:pip install https://github.com/nchammas/flintrock/archive/master.zip
+./flintrock/flintrock.py:    print("Cluster master: {}".format(cluster.master_host))
+./flintrock/flintrock.py:@click.option('--master-hostname-only', is_flag=True, default=False)
+./flintrock/flintrock.py:        master_hostname_only,
+./flintrock/flintrock.py:        if master_hostname_only:
+./flintrock/flintrock.py:            logger.info(cluster.master_host)
+./flintrock/flintrock.py:        if master_hostname_only:
+./flintrock/flintrock.py:                logger.info("{}: {}".format(cluster.name, cluster.master_host))
+./flintrock/flintrock.py:    Login to the master of an existing cluster.
+./flintrock/flintrock.py:    # TODO: Check that master up first and error out cleanly if not
+./flintrock/flintrock.py:    automatically from the master.
+./flintrock/flintrock.py:    if cluster.num_masters == 0:
+./flintrock/flintrock.py:            "appear to have a master."
+./flintrock/flintrock.py:@click.option('--master-only', help="Run on the master only.", is_flag=True)
+./flintrock/flintrock.py:        master_only,
+./flintrock/flintrock.py:        target="master only" if master_only else "cluster"))
+./flintrock/flintrock.py:        master_only=master_only,
+./flintrock/flintrock.py:@click.option('--master-only', help="Copy to the master only.", is_flag=True)
+./flintrock/flintrock.py:        master_only,
+./flintrock/flintrock.py:    if not assume_yes and not master_only:
+./flintrock/flintrock.py:        target="master only" if master_only else "cluster"))
+./flintrock/flintrock.py:        master_only=master_only,
+./flintrock/services.py:        This method is role-agnostic; it runs on both the cluster master and slaves.
+./flintrock/services.py:        This method is role-agnostic; it runs on both the cluster master and slaves.
+./flintrock/services.py:    def configure_master(
+./flintrock/services.py:        Configure the service master on a node via the provided SSH client after the
+./flintrock/services.py:        role-agnostic configuration in configure() is complete. Start the master and
+./flintrock/services.py:        This method is meant to be called once on the cluster master.
+./flintrock/services.py:            master_host: str):
+./flintrock/services.py:        Check that the service is up and running by querying the cluster master.
+./flintrock/services.py:            'hadoop/conf/masters',
+./flintrock/services.py:    # TODO: Convert this into start_master() and split master- or slave-specific
+./flintrock/services.py:    #       stuff out of configure() into configure_master() and configure_slave().
+./flintrock/services.py:    def configure_master(
+./flintrock/services.py:        logger.info("[{h}] Configuring HDFS master...".format(h=host))
+./flintrock/services.py:                        master_ui_response_code=0
+./flintrock/services.py:                        while [ "$master_ui_response_code" -ne 200 ]; do
+./flintrock/services.py:                            master_ui_response_code="$(
+./flintrock/services.py:                    """.format(m=shlex.quote(cluster.master_private_host), p=self.name_node_ui_port),
+./flintrock/services.py:                    "Timed out waiting for HDFS master to come up.{}"
+./flintrock/services.py:            raise Exception("Time out waiting for HDFS master to come up.")
+./flintrock/services.py:    def health_check(self, master_host: str):
+./flintrock/services.py:        hdfs_master_ui = 'http://{m}:{p}/webhdfs/v1/?op=GETCONTENTSUMMARY'.format(m=master_host, p=self.name_node_ui_port)
+./flintrock/services.py:                .urlopen(hdfs_master_ui)
+./flintrock/services.py:    # TODO: Convert this into start_master() and split master- or slave-specific
+./flintrock/services.py:    #       stuff out of configure() into configure_master() and configure_slave().
+./flintrock/services.py:    #       a sleep() before starting the master.
+./flintrock/services.py:    def configure_master(
+./flintrock/services.py:        logger.info("[{h}] Configuring Spark master...".format(h=host))
+./flintrock/services.py:                        master_ui_response_code=0
+./flintrock/services.py:                        while [ "$master_ui_response_code" -ne 200 ]; do
+./flintrock/services.py:                            master_ui_response_code="$(
+./flintrock/services.py:                    """.format(m=shlex.quote(cluster.master_private_host)),
+./flintrock/services.py:                    "Timed out waiting for Spark master to come up.{}"
+./flintrock/services.py:            raise Exception("Timed out waiting for Spark master to come up.")
+./flintrock/services.py:    def health_check(self, master_host: str):
+./flintrock/services.py:        spark_master_ui = 'http://{m}:8080/json/'.format(m=master_host)
+./flintrock/services.py:                .urlopen(spark_master_ui)
+./flintrock/core.py:    def master_ip(self) -> str:
+./flintrock/core.py:        The IP address of the master.
+./flintrock/core.py:    def master_host(self) -> str:
+./flintrock/core.py:        The hostname of the master.
+./flintrock/core.py:    def num_masters(self) -> int:
+./flintrock/core.py:        How many masters the cluster has.
+./flintrock/core.py:        This normally just equals 1, but in cases where the cluster master
+./flintrock/core.py:        Load a cluster's manifest from the master. This will populate information
+./flintrock/core.py:        if not self.master_ip:
+./flintrock/core.py:        master_ssh_client = get_ssh_client(
+./flintrock/core.py:            host=self.master_ip,
+./flintrock/core.py:        with master_ssh_client:
+./flintrock/core.py:                client=master_ssh_client,
+./flintrock/core.py:                client=master_ssh_client,
+./flintrock/core.py:        hosts = [self.master_ip] + self.slave_ips
+./flintrock/core.py:        master_ssh_client = get_ssh_client(
+./flintrock/core.py:            host=self.master_ip,
+./flintrock/core.py:        with master_ssh_client:
+./flintrock/core.py:                service.configure_master(
+./flintrock/core.py:                    ssh_client=master_ssh_client,
+./flintrock/core.py:            service.health_check(master_host=self.master_ip)
+./flintrock/core.py:        hosts = [self.master_ip] + self.slave_ips
+./flintrock/core.py:        master_ssh_client = get_ssh_client(
+./flintrock/core.py:            host=self.master_ip,
+./flintrock/core.py:        with master_ssh_client:
+./flintrock/core.py:                service.configure_master(
+./flintrock/core.py:                    ssh_client=master_ssh_client,
+./flintrock/core.py:        hosts = [self.master_ip] + self.slave_ips
+./flintrock/core.py:            master_only: bool,
+./flintrock/core.py:        If master_only is True, then run the comand on the master only.
+./flintrock/core.py:        if master_only:
+./flintrock/core.py:            target_hosts = [self.master_ip]
+./flintrock/core.py:            target_hosts = [self.master_ip] + self.slave_ips
+./flintrock/core.py:            master_only: bool,
+./flintrock/core.py:        If master_only is True, then copy the file to the master only.
+./flintrock/core.py:        if master_only:
+./flintrock/core.py:            target_hosts = [self.master_ip]
+./flintrock/core.py:            target_hosts = [self.master_ip] + self.slave_ips
+./flintrock/core.py:        Interactively SSH into the cluster master.
+./flintrock/core.py:            host=self.master_ip,
+./flintrock/core.py:        'master_ip': cluster.master_ip,
+./flintrock/core.py:        'master_host': cluster.master_host,
+./flintrock/core.py:        'master_private_host': cluster.master_private_host,
+./flintrock/core.py:    hosts = [cluster.master_ip] + cluster.slave_ips
+./flintrock/core.py:    master_ssh_client = get_ssh_client(
+./flintrock/core.py:        host=cluster.master_host,
+./flintrock/core.py:    with master_ssh_client:
+./flintrock/core.py:            client=master_ssh_client,
+./flintrock/core.py:            service.configure_master(
+./flintrock/core.py:                ssh_client=master_ssh_client,
+./flintrock/core.py:        service.health_check(master_host=cluster.master_host)
+./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./flintrock/ec2.py:            master_instance: 'boto3.resources.factory.ec2.Instance',
+./flintrock/ec2.py:        self.master_instance = master_instance
+./flintrock/ec2.py:        if self.master_instance:
+./flintrock/ec2.py:            return [self.master_instance] + self.slave_instances
+./flintrock/ec2.py:    def master_ip(self):
+./flintrock/ec2.py:        return self.master_instance.public_ip_address
+./flintrock/ec2.py:    def master_host(self):
+./flintrock/ec2.py:        return self.master_instance.public_dns_name
+./flintrock/ec2.py:    def master_private_host(self):
+./flintrock/ec2.py:        return self.master_instance.private_dns_name
+./flintrock/ec2.py:    def num_masters(self):
+./flintrock/ec2.py:        return 1 if self.master_instance else 0
+./flintrock/ec2.py:        master and slave IP addresses and hostnames.
+./flintrock/ec2.py:            (self.master_instance, self.slave_instances) = _get_cluster_master_slaves(instances)
+./flintrock/ec2.py:            for group in self.master_instance.security_groups]
+./flintrock/ec2.py:            ami=self.master_instance.image_id,
+./flintrock/ec2.py:        availability_zone = self.master_instance.placement['AvailabilityZone']
+./flintrock/ec2.py:            InstanceId=self.master_instance.id,
+./flintrock/ec2.py:            InstanceId=self.master_instance.id,
+./flintrock/ec2.py:        if not self.master_instance.iam_instance_profile:
+./flintrock/ec2.py:            instance_profile_arn = self.master_instance.iam_instance_profile['Arn']
+./flintrock/ec2.py:                ami=self.master_instance.image_id,
+./flintrock/ec2.py:                key_name=self.master_instance.key_name,
+./flintrock/ec2.py:                instance_type=self.master_instance.instance_type,
+./flintrock/ec2.py:                placement_group=self.master_instance.placement['GroupName'],
+./flintrock/ec2.py:                tenancy=self.master_instance.placement['Tenancy'],
+./flintrock/ec2.py:                subnet_id=self.master_instance.subnet_id,
+./flintrock/ec2.py:                ebs_optimized=self.master_instance.ebs_optimized,
+./flintrock/ec2.py:    def run_command(self, *, master_only, command, user, identity_file):
+./flintrock/ec2.py:            master_only=master_only,
+./flintrock/ec2.py:    def copy_file(self, *, local_path, remote_path, master_only=False, user, identity_file):
+./flintrock/ec2.py:            master_only=master_only,
+./flintrock/ec2.py:            print('  master:', self.master_host if self.num_masters > 0 else '')
+./flintrock/ec2.py:        master_instance = cluster_instances[0]
+./flintrock/ec2.py:        master_tags = [
+./flintrock/ec2.py:            {'Key': 'flintrock-role', 'Value': 'master'},
+./flintrock/ec2.py:            {'Key': 'Name', 'Value': '{c}-master'.format(c=cluster_name)}]
+./flintrock/ec2.py:        master_tags += tags
+./flintrock/ec2.py:                    {'Name': 'instance-id', 'Values': [master_instance.id]}
+./flintrock/ec2.py:            .create_tags(Tags=master_tags))
+./flintrock/ec2.py:            master_instance=master_instance,
+./flintrock/ec2.py:def _get_cluster_master_slaves(
+./flintrock/ec2.py:    Get the master and slave instances from a set of raw EC2 instances representing
+./flintrock/ec2.py:    master_instance = None
+./flintrock/ec2.py:                if tag['Value'] == 'master':
+./flintrock/ec2.py:                    if master_instance is not None:
+./flintrock/ec2.py:                        raise Exception("More than one master found.")
+./flintrock/ec2.py:                        master_instance = instance
+./flintrock/ec2.py:    # if not master_instance:
+./flintrock/ec2.py:    #     print("Warning: No master found.", file=sys.stderr)
+./flintrock/ec2.py:    return (master_instance, slave_instances)
+./flintrock/ec2.py:    (master_instance, slave_instances) = _get_cluster_master_slaves(instances)
+./flintrock/ec2.py:        master_instance=master_instance,
+./flintrock/templates/hadoop/conf/core-site.xml:    <value>hdfs://{master_private_host}:9000</value>
+./flintrock/templates/hadoop/conf/masters:{master_private_host}
+./flintrock/templates/spark/conf/spark-env.sh:export SPARK_MASTER_HOST="{master_private_host}"
+./README.md:![Flintrock logo](https://raw.githubusercontent.com/nchammas/flintrock/master/flintrock-logo.png)
+./README.md:[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/nchammas/flintrock/blob/master/LICENSE)
+./README.md:[![Build Status](https://img.shields.io/travis/nchammas/flintrock/master.svg)](https://travis-ci.org/nchammas/flintrock)
+./README.md:[copyright](https://github.com/nchammas/flintrock/blob/master/COPYRIGHT)
+./README.md:notice and [license](https://github.com/nchammas/flintrock/blob/master/LICENSE)
+./README.md:If you want to [contribute](https://github.com/nchammas/flintrock/blob/master/CONTRIBUTING.md), follow the instructions in our contributing guide on [how to install Flintrock](https://github.com/nchammas/flintrock/blob/master/CONTRIBUTING.md#contributing-code).
+./README.md:Flintrock comes with a set of automated, end-to-end [tests](https://github.com/nchammas/flintrock/tree/master/tests). These tests help us develop Flintrock with confidence and guarantee a certain level of quality.
+./README.md:The [Flintrock logo](https://github.com/nchammas/flintrock/blob/master/flintrock-logo.png) was created using [Highbrow Cafetorium JNL](http://www.myfonts.com/fonts/jnlevine/highbrow-cafetorium/) and [this icon](https://thenounproject.com/term/stars/40856/). Licenses to use both the font and icon were purchased from their respective owners.
+./CHANGES.md:[Unreleased]: https://github.com/nchammas/flintrock/compare/v1.0.0...master
+./CHANGES.md:* [#264]: Fixed a logging error in `flintrock describe --master-hostname-only`.
+./CHANGES.md:  master address and login command.
+./CHANGES.md:  HDFS masters if it encounters common issues with bringing the
+./CHANGES.md:* [#115]: If you lost your master somehow, Flintrock can now still
+./CHANGES.md:  master on the cluster.
+./TODO_remove_slave_references:./flintrock/services.py:        This method is role-agnostic; it runs on both the cluster master and slaves.
+./TODO_remove_slave_references:./flintrock/services.py:        This method is role-agnostic; it runs on both the cluster master and slaves.
+./TODO_remove_slave_references:./flintrock/services.py:    # TODO: Convert this into start_master() and split master- or slave-specific
+./TODO_remove_slave_references:./flintrock/services.py:    #       stuff out of configure() into configure_master() and configure_slave().
+./TODO_remove_slave_references:./flintrock/services.py:    # TODO: Convert this into start_master() and split master- or slave-specific
+./TODO_remove_slave_references:./flintrock/services.py:    #       stuff out of configure() into configure_master() and configure_slave().
+./TODO_remove_slave_references:./flintrock/core.py:        hosts = [self.master_ip] + self.slave_ips
+./TODO_remove_slave_references:./flintrock/core.py:        hosts = [self.master_ip] + self.slave_ips
+./TODO_remove_slave_references:./flintrock/core.py:        hosts = [self.master_ip] + self.slave_ips
+./TODO_remove_slave_references:./flintrock/core.py:            target_hosts = [self.master_ip] + self.slave_ips
+./TODO_remove_slave_references:./flintrock/core.py:            target_hosts = [self.master_ip] + self.slave_ips
+./TODO_remove_slave_references:./flintrock/core.py:    hosts = [cluster.master_ip] + cluster.slave_ips
+./TODO_remove_slave_references:./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./TODO_remove_slave_references:./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./TODO_remove_slave_references:./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./TODO_remove_slave_references:./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./TODO_remove_slave_references:./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./TODO_remove_slave_references:./flintrock/core.py:    This method is role-agnostic; it runs on both the cluster master and slaves.
+./TODO_remove_slave_references:./flintrock/ec2.py:            return [self.master_instance] + self.slave_instances
+./TODO_remove_slave_references:./flintrock/ec2.py:        master and slave IP addresses and hostnames.
+./TODO_remove_slave_references:./flintrock/ec2.py:            (self.master_instance, self.slave_instances) = _get_cluster_master_slaves(instances)
+./TODO_remove_slave_references:./flintrock/ec2.py:def _get_cluster_master_slaves(
+./TODO_remove_slave_references:./flintrock/ec2.py:    Get the master and slave instances from a set of raw EC2 instances representing
+./TODO_remove_slave_references:./flintrock/ec2.py:    return (master_instance, slave_instances)
+./TODO_remove_slave_references:./flintrock/ec2.py:    (master_instance, slave_instances) = _get_cluster_master_slaves(instances)
