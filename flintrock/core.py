@@ -57,9 +57,9 @@ class FlintrockCluster:
         self.services = []
 
     @property
-    def master_ip(self) -> str:
+    def controller_ip(self) -> str:
         """
-        The IP address of the master.
+        The IP address of the controller.
 
         Providers must override this property since it is typically derived from
         an underlying object, like an EC2 instance.
@@ -67,9 +67,9 @@ class FlintrockCluster:
         raise NotImplementedError
 
     @property
-    def master_host(self) -> str:
+    def controller_host(self) -> str:
         """
-        The hostname of the master.
+        The hostname of the controller.
 
         Providers must override this property since it is typically derived from
         an underlying object, like an EC2 instance.
@@ -77,9 +77,9 @@ class FlintrockCluster:
         raise NotImplementedError
 
     @property
-    def slave_ips(self) -> 'List[str]':
+    def worker_ips(self) -> 'List[str]':
         """
-        A list of the IP addresses of the slaves.
+        A list of the IP addresses of the workers.
 
         Providers must override this property since it is typically derived from
         an underlying object, like an EC2 instance.
@@ -87,9 +87,9 @@ class FlintrockCluster:
         raise NotImplementedError
 
     @property
-    def slave_hosts(self) -> 'List[str]':
+    def worker_hosts(self) -> 'List[str]':
         """
-        A list of the hostnames of the slaves.
+        A list of the hostnames of the workers.
 
         Providers must override this property since it is typically derived from
         an underlying object, like an EC2 instance.
@@ -97,11 +97,11 @@ class FlintrockCluster:
         raise NotImplementedError
 
     @property
-    def num_masters(self) -> int:
+    def num_controllers(self) -> int:
         """
-        How many masters the cluster has.
+        How many controllers the cluster has.
 
-        This normally just equals 1, but in cases where the cluster master
+        This normally just equals 1, but in cases where the cluster controller
         has been destroyed this should return 0.
 
         Providers must override this property.
@@ -109,14 +109,14 @@ class FlintrockCluster:
         raise NotImplementedError
 
     @property
-    def num_slaves(self) -> int:
+    def num_workers(self) -> int:
         """
-        How many slaves the cluster has.
+        How many workers the cluster has.
 
-        This is typically just len(self.slave_ips), but we need a separate
-        property because slave IPs are not available when the cluster is
+        This is typically just len(self.worker_ips), but we need a separate
+        property because worker IPs are not available when the cluster is
         stopped, and sometimes in that situation we still want to know how
-        many slaves there are.
+        many workers there are.
 
         Providers must override this property.
         """
@@ -124,31 +124,31 @@ class FlintrockCluster:
 
     def load_manifest(self, *, user: str, identity_file: str):
         """
-        Load a cluster's manifest from the master. This will populate information
+        Load a cluster's manifest from the controller. This will populate information
         about installed services and configured storage.
 
         Providers shouldn't need to override this method.
         """
-        if not self.master_ip:
+        if not self.controller_ip:
             return
 
-        master_ssh_client = get_ssh_client(
+        controller_ssh_client = get_ssh_client(
             user=user,
-            host=self.master_ip,
+            host=self.controller_ip,
             identity_file=identity_file,
             wait=True,
             print_status=False)
 
-        with master_ssh_client:
+        with controller_ssh_client:
             manifest_raw = ssh_check_output(
-                client=master_ssh_client,
+                client=controller_ssh_client,
                 command="""
                     cat "$HOME/.flintrock-manifest.json"
                 """)
             # TODO: Would it be better if storage (ephemeral and otherwise) was
             #       implemented as a Flintrock service and tracked in the manifest?
             ephemeral_dirs_raw = ssh_check_output(
-                client=master_ssh_client,
+                client=controller_ssh_client,
                 # It's generally safer to avoid using ls:
                 # http://mywiki.wooledge.org/ParsingLs
                 command="""
@@ -229,23 +229,23 @@ class FlintrockCluster:
             user=user,
             identity_file=identity_file,
             cluster=self)
-        hosts = [self.master_ip] + self.slave_ips
+        hosts = [self.controller_ip] + self.worker_ips
 
         run_against_hosts(partial_func=partial_func, hosts=hosts)
 
-        master_ssh_client = get_ssh_client(
+        controller_ssh_client = get_ssh_client(
             user=user,
-            host=self.master_ip,
+            host=self.controller_ip,
             identity_file=identity_file)
 
-        with master_ssh_client:
+        with controller_ssh_client:
             for service in self.services:
-                service.configure_master(
-                    ssh_client=master_ssh_client,
+                service.configure_controller(
+                    ssh_client=controller_ssh_client,
                     cluster=self)
 
         for service in self.services:
-            service.health_check(master_host=self.master_ip)
+            service.health_check(controller_host=self.controller_ip)
 
     def stop_check(self):
         """
@@ -265,23 +265,23 @@ class FlintrockCluster:
         """
         pass
 
-    def add_slaves_check(self):
+    def add_workers_check(self):
         pass
 
-    def add_slaves(self, *, user: str, identity_file: str, new_hosts: list):
+    def add_workers(self, *, user: str, identity_file: str, new_hosts: list):
         """
-        Add new slaves to the cluster.
+        Add new workers to the cluster.
 
         Providers should implement this with the following signature:
 
-            add_slaves(self, *, user: str, identity_file: str, num_slaves: int, **provider_specific_options)
+            add_workers(self, *, user: str, identity_file: str, num_workers: int, **provider_specific_options)
 
         This method should be called after the new hosts are online and have been
         added to the cluster's internal list.
         """
-        hosts = [self.master_ip] + self.slave_ips
+        hosts = [self.controller_ip] + self.worker_ips
         partial_func = functools.partial(
-            add_slaves_node,
+            add_workers_node,
             services=self.services,
             user=user,
             identity_file=identity_file,
@@ -289,40 +289,40 @@ class FlintrockCluster:
             new_hosts=new_hosts)
         run_against_hosts(partial_func=partial_func, hosts=hosts)
 
-        master_ssh_client = get_ssh_client(
+        controller_ssh_client = get_ssh_client(
             user=user,
-            host=self.master_ip,
+            host=self.controller_ip,
             identity_file=identity_file)
-        with master_ssh_client:
+        with controller_ssh_client:
             for service in self.services:
-                service.configure_master(
-                    ssh_client=master_ssh_client,
+                service.configure_controller(
+                    ssh_client=controller_ssh_client,
                     cluster=self)
 
-    def remove_slaves(self, *, user: str, identity_file: str):
+    def remove_workers(self, *, user: str, identity_file: str):
         """
-        Remove some slaves from the cluster.
+        Remove some workers from the cluster.
 
         Providers should implement this method with the following signature:
 
-            remove_slaves(self, *, user: str, identity_file: str, num_slaves: int)
+            remove_workers(self, *, user: str, identity_file: str, num_workers: int)
 
-        This method should be called after the provider has removed the slaves
+        This method should be called after the provider has removed the workers
         from the cluster's internal list but before the instances themselves
         have been terminated.
 
         This method simply makes sure that the rest of the cluster knows that
-        the relevant slaves are no longer part of the cluster.
+        the relevant workers are no longer part of the cluster.
         """
         self.load_manifest(user=user, identity_file=identity_file)
 
         partial_func = functools.partial(
-            remove_slaves_node,
+            remove_workers_node,
             user=user,
             identity_file=identity_file,
             services=self.services,
             cluster=self)
-        hosts = [self.master_ip] + self.slave_ips
+        hosts = [self.controller_ip] + self.worker_ips
 
         run_against_hosts(partial_func=partial_func, hosts=hosts)
 
@@ -338,19 +338,19 @@ class FlintrockCluster:
     def run_command(
             self,
             *,
-            master_only: bool,
+            controller_only: bool,
             user: str,
             identity_file: str,
             command: tuple):
         """
         Run a shell command on each node of an existing cluster.
 
-        If master_only is True, then run the comand on the master only.
+        If controller_only is True, then run the comand on the controller only.
         """
-        if master_only:
-            target_hosts = [self.master_ip]
+        if controller_only:
+            target_hosts = [self.controller_ip]
         else:
-            target_hosts = [self.master_ip] + self.slave_ips
+            target_hosts = [self.controller_ip] + self.worker_ips
 
         partial_func = functools.partial(
             run_command_node,
@@ -374,7 +374,7 @@ class FlintrockCluster:
     def copy_file(
             self,
             *,
-            master_only: bool,
+            controller_only: bool,
             user: str,
             identity_file: str,
             local_path: str,
@@ -382,12 +382,12 @@ class FlintrockCluster:
         """
         Copy a file to each node of an existing cluster.
 
-        If master_only is True, then copy the file to the master only.
+        If controller_only is True, then copy the file to the controller only.
         """
-        if master_only:
-            target_hosts = [self.master_ip]
+        if controller_only:
+            target_hosts = [self.controller_ip]
         else:
-            target_hosts = [self.master_ip] + self.slave_ips
+            target_hosts = [self.controller_ip] + self.worker_ips
 
         partial_func = functools.partial(
             copy_file_node,
@@ -405,10 +405,10 @@ class FlintrockCluster:
             user: str,
             identity_file: str):
         """
-        Interactively SSH into the cluster master.
+        Interactively SSH into the cluster controller.
         """
         ssh(
-            host=self.master_ip,
+            host=self.controller_ip,
             user=user,
             identity_file=identity_file)
 
@@ -439,12 +439,12 @@ def generate_template_mapping(
     )
 
     template_mapping = {
-        'master_ip': cluster.master_ip,
-        'master_host': cluster.master_host,
-        'master_private_host': cluster.master_private_host,
-        'slave_ips': '\n'.join(cluster.slave_ips),
-        'slave_hosts': '\n'.join(cluster.slave_hosts),
-        'slave_private_hosts': '\n'.join(cluster.slave_private_hosts),
+        'controller_ip': cluster.controller_ip,
+        'controller_host': cluster.controller_host,
+        'controller_private_host': cluster.controller_private_host,
+        'worker_ips': '\n'.join(cluster.worker_ips),
+        'worker_hosts': '\n'.join(cluster.worker_hosts),
+        'worker_private_hosts': '\n'.join(cluster.worker_private_hosts),
 
         'hadoop_version': hadoop_version,
         'hadoop_short_version': '.'.join(hadoop_version.split('.')[:2]),
@@ -555,7 +555,7 @@ def setup_node(
     """
     Setup a new node.
 
-    Cluster methods like provision_node() and add_slaves_node() should
+    Cluster methods like provision_node() and add_workers_node() should
     delegate the main work of setting up new nodes to this function.
     """
     host = ssh_client.get_transport().getpeername()[0]
@@ -622,16 +622,16 @@ def provision_cluster(
         user=user,
         identity_file=identity_file,
         cluster=cluster)
-    hosts = [cluster.master_ip] + cluster.slave_ips
+    hosts = [cluster.controller_ip] + cluster.worker_ips
 
     run_against_hosts(partial_func=partial_func, hosts=hosts)
 
-    master_ssh_client = get_ssh_client(
+    controller_ssh_client = get_ssh_client(
         user=user,
-        host=cluster.master_host,
+        host=cluster.controller_host,
         identity_file=identity_file)
 
-    with master_ssh_client:
+    with controller_ssh_client:
         manifest = {
             'services': [[type(m).__name__, m.manifest] for m in services],
             'ssh_key_pair': cluster.ssh_key_pair._asdict(),
@@ -639,7 +639,7 @@ def provision_cluster(
         # The manifest tells us how the cluster is configured. We'll need this
         # when we resize the cluster or restart it.
         ssh_check_output(
-            client=master_ssh_client,
+            client=controller_ssh_client,
             command="""
                 echo {m} > "$HOME/.flintrock-manifest.json"
                 chmod go-rw "$HOME/.flintrock-manifest.json"
@@ -648,12 +648,12 @@ def provision_cluster(
             ))
 
         for service in services:
-            service.configure_master(
-                ssh_client=master_ssh_client,
+            service.configure_controller(
+                ssh_client=controller_ssh_client,
                 cluster=cluster)
 
     for service in services:
-        service.health_check(master_host=cluster.master_host)
+        service.health_check(controller_host=cluster.controller_host)
 
 
 def provision_node(
@@ -667,7 +667,7 @@ def provision_node(
     Connect to a freshly launched node, set it up for SSH access, configure ephemeral
     storage, and install the specified services.
 
-    This method is role-agnostic; it runs on both the cluster master and slaves.
+    This method is role-agnostic; it runs on both the cluster controller and workers.
     This method is meant to be called asynchronously.
     """
     client = get_ssh_client(
@@ -698,7 +698,7 @@ def start_node(
     Connect to an existing node that has just been started up again and prepare it for
     work.
 
-    This method is role-agnostic; it runs on both the cluster master and slaves.
+    This method is role-agnostic; it runs on both the cluster controller and workers.
     This method is meant to be called asynchronously.
     """
     ssh_client = get_ssh_client(
@@ -725,7 +725,7 @@ def start_node(
                 cluster=cluster)
 
 
-def add_slaves_node(
+def add_workers_node(
         *,
         user: str,
         host: str,
@@ -737,7 +737,7 @@ def add_slaves_node(
     If the node is new, set it up. If not, just reconfigure it to recognize
     the newly added nodes.
 
-    This method is role-agnostic; it runs on both the cluster master and slaves.
+    This method is role-agnostic; it runs on both the cluster controller and workers.
     This method is meant to be called asynchronously.
     """
     is_new_host = host in new_hosts
@@ -761,7 +761,7 @@ def add_slaves_node(
                 cluster=cluster)
 
 
-def remove_slaves_node(
+def remove_workers_node(
         *,
         user: str,
         host: str,
@@ -769,9 +769,9 @@ def remove_slaves_node(
         services: list,
         cluster: FlintrockCluster):
     """
-    Update the services on a node to remove the provided slaves.
+    Update the services on a node to remove the provided workers.
 
-    This method is role-agnostic; it runs on both the cluster master and slaves.
+    This method is role-agnostic; it runs on both the cluster controller and workers.
     This method is meant to be called asynchronously.
     """
     ssh_client = get_ssh_client(
@@ -789,7 +789,7 @@ def run_command_node(*, user: str, host: str, identity_file: str, command: tuple
     """
     Run a shell command on a node.
 
-    This method is role-agnostic; it runs on both the cluster master and slaves.
+    This method is role-agnostic; it runs on both the cluster controller and workers.
     This method is meant to be called asynchronously.
     """
     ssh_client = get_ssh_client(
@@ -819,7 +819,7 @@ def copy_file_node(
     """
     Copy a file to the specified remote path on a node.
 
-    This method is role-agnostic; it runs on both the cluster master and slaves.
+    This method is role-agnostic; it runs on both the cluster controller and workers.
     This method is meant to be called asynchronously.
     """
     ssh_client = get_ssh_client(

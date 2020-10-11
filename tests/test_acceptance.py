@@ -75,7 +75,7 @@ def test_hdfs_on_running_cluster(running_cluster, remote_file):
     hdfs_path = '/hdfs_file'
 
     p = subprocess.run([
-        'flintrock', 'run-command', running_cluster, '--master-only', '--',
+        'flintrock', 'run-command', running_cluster, '--controller-only', '--',
         './hadoop/bin/hdfs', 'dfs', '-put', remote_file, hdfs_path])
     assert p.returncode == 0
 
@@ -93,14 +93,14 @@ def test_spark_on_running_cluster(running_cluster, remote_file):
     assert p.returncode == 0
 
     p = subprocess.run([
-        'flintrock', 'describe', running_cluster, '--master-hostname-only'],
+        'flintrock', 'describe', running_cluster, '--controller-hostname-only'],
         stdout=subprocess.PIPE)
-    master_address = p.stdout.strip().decode('utf-8')
+    controller_address = p.stdout.strip().decode('utf-8')
     assert p.returncode == 0
 
-    spark_master_ui = 'http://{m}:8080/json/'.format(m=master_address)
+    spark_controller_ui = 'http://{m}:8080/json/'.format(m=controller_address)
     spark_ui_info = json.loads(
-        urllib.request.urlopen(spark_master_ui).read().decode('utf-8'))
+        urllib.request.urlopen(spark_controller_ui).read().decode('utf-8'))
     assert spark_ui_info['status'] == 'ALIVE'
 
 

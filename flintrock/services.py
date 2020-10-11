@@ -62,7 +62,7 @@ class FlintrockService:
         Install the service on a node via the provided SSH client. This typically
         means downloading a software package and maybe even building it if necessary.
 
-        This method is role-agnostic; it runs on both the cluster master and slaves.
+        This method is role-agnostic; it runs on both the cluster controller and workers.
         This method is meant to be called asynchronously.
         """
         raise NotImplementedError
@@ -75,43 +75,43 @@ class FlintrockService:
         Configure the installed service on a node via the provided SSH client. This
         typically means using templates to create configuration files on the node.
 
-        This method is role-agnostic; it runs on both the cluster master and slaves.
+        This method is role-agnostic; it runs on both the cluster controller and workers.
         This method is meant to be called asynchronously.
         """
         raise NotImplementedError
 
-    def configure_master(
+    def configure_controller(
             self,
             ssh_client: paramiko.client.SSHClient,
             cluster: FlintrockCluster):
         """
-        Configure the service master on a node via the provided SSH client after the
-        role-agnostic configuration in configure() is complete. Start the master and
-        slaves.
+        Configure the service controller on a node via the provided SSH client after the
+        role-agnostic configuration in configure() is complete. Start the controller and
+        workers.
 
-        This method is meant to be called once on the cluster master.
+        This method is meant to be called once on the cluster controller.
         This method is meant to be called asynchronously.
         """
         raise NotImplementedError
 
-    def configure_slave(
+    def configure_worker(
             self,
             ssh_client: paramiko.client.SSHClient,
             cluster: FlintrockCluster):
         """
-        Configure a service slave on a node via the provided SSH client after the
+        Configure a service worker on a node via the provided SSH client after the
         role-agnostic configuration in configure() is complete.
 
-        This method is meant to be called once on each cluster slave.
+        This method is meant to be called once on each cluster worker.
         This method is meant to be called asynchronously.
         """
         raise NotImplementedError
 
     def health_check(
             self,
-            master_host: str):
+            controller_host: str):
         """
-        Check that the service is up and running by querying the cluster master.
+        Check that the service is up and running by querying the cluster controller.
         """
         raise NotImplementedError
 
@@ -164,8 +164,8 @@ class HDFS(FlintrockService):
             cluster: FlintrockCluster):
         # TODO: os.walk() through these files.
         template_paths = [
-            'hadoop/conf/masters',
-            'hadoop/conf/slaves',
+            'hadoop/conf/controllers',
+            'hadoop/conf/workers',
             'hadoop/conf/hadoop-env.sh',
             'hadoop/conf/core-site.xml',
             'hadoop/conf/hdfs-site.xml',
@@ -195,14 +195,14 @@ class HDFS(FlintrockService):
                             ))),
                     p=shlex.quote(template_path)))
 
-    # TODO: Convert this into start_master() and split master- or slave-specific
-    #       stuff out of configure() into configure_master() and configure_slave().
-    def configure_master(
+    # TODO: Convert this into start_controller() and split controller- or worker-specific
+    #       stuff out of configure() into configure_controller() and configure_worker().
+    def configure_controller(
             self,
             ssh_client: paramiko.client.SSHClient,
             cluster: FlintrockCluster):
         host = ssh_client.get_transport().getpeername()[0]
-        logger.info("[{h}] Configuring HDFS master...".format(h=host))
+        logger.info("[{h}] Configuring HDFS controller...".format(h=host))
 
         ssh_check_output(
             client=ssh_client,
@@ -221,35 +221,35 @@ class HDFS(FlintrockService):
                         ./hadoop/sbin/stop-dfs.sh
                         ./hadoop/sbin/start-dfs.sh
 
-                        master_ui_response_code=0
-                        while [ "$master_ui_response_code" -ne 200 ]; do
+                        controller_ui_response_code=0
+                        while [ "$controller_ui_response_code" -ne 200 ]; do
                             sleep 1
-                            master_ui_response_code="$(
+                            controller_ui_response_code="$(
                                 curl --head --silent --output /dev/null \
                                     --write-out "%{{http_code}}" {m}:{p}
                             )"
                         done
-                    """.format(m=shlex.quote(cluster.master_private_host), p=self.name_node_ui_port),
+                    """.format(m=shlex.quote(cluster.controller_private_host), p=self.name_node_ui_port),
                     timeout_seconds=90
                 )
                 break
             except socket.timeout as e:
                 logger.debug(
-                    "Timed out waiting for HDFS master to come up.{}"
+                    "Timed out waiting for HDFS controller to come up.{}"
                     .format(" Trying again..." if attempt < attempt_limit - 1 else "")
                 )
         else:
-            raise Exception("Time out waiting for HDFS master to come up.")
+            raise Exception("Time out waiting for HDFS controller to come up.")
 
-    def health_check(self, master_host: str):
+    def health_check(self, controller_host: str):
         # This info is not helpful as a detailed health check, but it gives us
         # an up / not up signal.
-        hdfs_master_ui = 'http://{m}:{p}/webhdfs/v1/?op=GETCONTENTSUMMARY'.format(m=master_host, p=self.name_node_ui_port)
+        hdfs_controller_ui = 'http://{m}:{p}/webhdfs/v1/?op=GETCONTENTSUMMARY'.format(m=controller_host, p=self.name_node_ui_port)
 
         try:
             json.loads(
                 urllib.request
-                .urlopen(hdfs_master_ui)
+                .urlopen(hdfs_controller_ui)
                 .read()
                 .decode('utf-8'))
             logger.info("HDFS online.")
@@ -365,7 +365,7 @@ class Spark(FlintrockService):
 
         template_paths = [
             'spark/conf/spark-env.sh',
-            'spark/conf/slaves',
+            'spark/conf/workers',
         ]
 
         ssh_check_output(
@@ -390,16 +390,16 @@ class Spark(FlintrockService):
                             ))),
                     p=shlex.quote(template_path)))
 
-    # TODO: Convert this into start_master() and split master- or slave-specific
-    #       stuff out of configure() into configure_master() and configure_slave().
-    #       start_slave() can block until slave is fully up; that way we don't need
-    #       a sleep() before starting the master.
-    def configure_master(
+    # TODO: Convert this into start_controller() and split controller- or worker-specific
+    #       stuff out of configure() into configure_controller() and configure_worker().
+    #       start_worker() can block until worker is fully up; that way we don't need
+    #       a sleep() before starting the controller.
+    def configure_controller(
             self,
             ssh_client: paramiko.client.SSHClient,
             cluster: FlintrockCluster):
         host = ssh_client.get_transport().getpeername()[0]
-        logger.info("[{h}] Configuring Spark master...".format(h=host))
+        logger.info("[{h}] Configuring Spark controller...".format(h=host))
 
         # This loop is a band-aid for: https://github.com/nchammas/flintrock/issues/129
         attempt_limit = 3
@@ -412,33 +412,33 @@ class Spark(FlintrockService):
                     command="""
                         spark/sbin/start-all.sh
 
-                        master_ui_response_code=0
-                        while [ "$master_ui_response_code" -ne 200 ]; do
+                        controller_ui_response_code=0
+                        while [ "$controller_ui_response_code" -ne 200 ]; do
                             sleep 1
-                            master_ui_response_code="$(
+                            controller_ui_response_code="$(
                                 curl --head --silent --output /dev/null \
                                     --write-out "%{{http_code}}" {m}:8080
                             )"
                         done
-                    """.format(m=shlex.quote(cluster.master_private_host)),
+                    """.format(m=shlex.quote(cluster.controller_private_host)),
                     timeout_seconds=90
                 )
                 break
             except socket.timeout as e:
                 logger.debug(
-                    "Timed out waiting for Spark master to come up.{}"
+                    "Timed out waiting for Spark controller to come up.{}"
                     .format(" Trying again..." if attempt < attempt_limit - 1 else "")
                 )
         else:
-            raise Exception("Timed out waiting for Spark master to come up.")
+            raise Exception("Timed out waiting for Spark controller to come up.")
 
-    def health_check(self, master_host: str):
-        spark_master_ui = 'http://{m}:8080/json/'.format(m=master_host)
+    def health_check(self, controller_host: str):
+        spark_controller_ui = 'http://{m}:8080/json/'.format(m=controller_host)
 
         try:
             json.loads(
                 urllib.request
-                .urlopen(spark_master_ui)
+                .urlopen(spark_controller_ui)
                 .read()
                 .decode('utf-8')
             )

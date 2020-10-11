@@ -33,7 +33,7 @@ less /home/ec2-user/.config/flintrock/config.yaml
 All you need to do is pick a version of Flintrock to install and then you can begin your tests against a private VPC!
 
 ```sh
-pip install https://github.com/nchammas/flintrock/archive/master.zip
+pip install https://github.com/nchammas/flintrock/archive/controller.zip
 flintrock launch test-cluster
 flintrock login test-cluster
 ```

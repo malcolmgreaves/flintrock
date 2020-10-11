@@ -45,12 +45,12 @@ def dummy_cluster():
     cluster = Dummy()
     cluster.name = 'test'
     cluster.storage_dirs = storage_dirs
-    cluster.master_ip = '10.0.0.1'
-    cluster.master_host = 'master.hostname'
-    cluster.master_private_host = 'master.privatehostname'
-    cluster.slave_ips = ['10.0.0.2']
-    cluster.slave_hosts = ['slave1.hostname']
-    cluster.slave_private_hosts = ['slave1.privatehostname']
+    cluster.controller_ip = '10.0.0.1'
+    cluster.controller_host = 'controller.hostname'
+    cluster.controller_private_host = 'controller.privatehostname'
+    cluster.worker_ips = ['10.0.0.2']
+    cluster.worker_hosts = ['worker1.hostname']
+    cluster.worker_private_hosts = ['worker1.privatehostname']
 
     return cluster
 
@@ -67,7 +67,7 @@ def launch_cluster(
         spark_git_commit):
     p = subprocess.run([
         'flintrock', 'launch', cluster_name,
-        '--num-slaves', '1',
+        '--num-workers', '1',
         '--install-hdfs',
         '--hdfs-version', HADOOP_VERSION,
         '--install-spark',
@@ -155,7 +155,7 @@ def stopped_cluster(request):
     cluster_name = 'running-cluster-' + random_string()
     p = subprocess.run([
         'flintrock', 'launch', cluster_name,
-        '--num-slaves', '1',
+        '--num-workers', '1',
         '--no-install-hdfs',
         '--no-install-spark',
         '--assume-yes',

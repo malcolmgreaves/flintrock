@@ -61,54 +61,54 @@ class EC2Cluster(FlintrockCluster):
             self,
             region: str,
             vpc_id: str,
-            master_instance: 'boto3.resources.factory.ec2.Instance',
-            slave_instances: "List[boto3.resources.factory.ec2.Instance]",
+            controller_instance: 'boto3.resources.factory.ec2.Instance',
+            worker_instances: "List[boto3.resources.factory.ec2.Instance]",
             *args,
             **kwargs):
         super().__init__(*args, **kwargs)
         self.region = region
         self.vpc_id = vpc_id
-        self.master_instance = master_instance
-        self.slave_instances = slave_instances
+        self.controller_instance = controller_instance
+        self.worker_instances = worker_instances
 
     @property
     def instances(self):
-        if self.master_instance:
-            return [self.master_instance] + self.slave_instances
+        if self.controller_instance:
+            return [self.controller_instance] + self.worker_instances
         else:
-            return self.slave_instances
+            return self.worker_instances
 
     @property
-    def master_ip(self):
-        return self.master_instance.public_ip_address
+    def controller_ip(self):
+        return self.controller_instance.public_ip_address
 
     @property
-    def master_host(self):
-        return self.master_instance.public_dns_name
+    def controller_host(self):
+        return self.controller_instance.public_dns_name
 
     @property
-    def master_private_host(self):
-        return self.master_instance.private_dns_name
+    def controller_private_host(self):
+        return self.controller_instance.private_dns_name
 
     @property
-    def slave_ips(self):
-        return [i.public_ip_address for i in self.slave_instances]
+    def worker_ips(self):
+        return [i.public_ip_address for i in self.worker_instances]
 
     @property
-    def slave_hosts(self):
-        return [i.public_dns_name for i in self.slave_instances]
+    def worker_hosts(self):
+        return [i.public_dns_name for i in self.worker_instances]
 
     @property
-    def slave_private_hosts(self):
-        return [i.private_dns_name for i in self.slave_instances]
+    def worker_private_hosts(self):
+        return [i.private_dns_name for i in self.worker_instances]
 
     @property
-    def num_masters(self):
-        return 1 if self.master_instance else 0
+    def num_controllers(self):
+        return 1 if self.controller_instance else 0
 
     @property
-    def num_slaves(self):
-        return len(self.slave_instances)
+    def num_workers(self):
+        return len(self.worker_instances)
 
     @property
     def state(self):
@@ -126,7 +126,7 @@ class EC2Cluster(FlintrockCluster):
         separate matter.
 
         This method updates the cluster's instance metadata and
-        master and slave IP addresses and hostnames.
+        controller and worker IP addresses and hostnames.
         """
         ec2 = boto3.resource(service_name='ec2', region_name=self.region)
 
@@ -146,7 +146,7 @@ class EC2Cluster(FlintrockCluster):
                     Filters=[
                         {'Name': 'instance-id', 'Values': [i.id for i in self.instances]}
                     ]))
-            (self.master_instance, self.slave_instances) = _get_cluster_master_slaves(instances)
+            (self.controller_instance, self.worker_instances) = _get_cluster_controller_workers(instances)
 
     def destroy(self):
         self.destroy_check()
@@ -235,43 +235,43 @@ class EC2Cluster(FlintrockCluster):
             .stop())
         self.wait_for_state('stopped')
 
-    def add_slaves_check(self):
+    def add_workers_check(self):
         if self.state != 'running':
             raise ClusterInvalidState(
-                attempted_command='add-slaves',
+                attempted_command='add-workers',
                 state=self.state)
 
     @timeit
-    def add_slaves(
+    def add_workers(
             self,
             *,
             user: str,
             identity_file: str,
-            num_slaves: int,
+            num_workers: int,
             spot_price: float,
             min_root_ebs_size_gb: int,
             tags: list,
             assume_yes: bool):
         security_group_ids = [
             group['GroupId']
-            for group in self.master_instance.security_groups]
+            for group in self.controller_instance.security_groups]
         block_device_mappings = get_ec2_block_device_mappings(
             min_root_ebs_size_gb=min_root_ebs_size_gb,
-            ami=self.master_instance.image_id,
+            ami=self.controller_instance.image_id,
             region=self.region)
-        availability_zone = self.master_instance.placement['AvailabilityZone']
+        availability_zone = self.controller_instance.placement['AvailabilityZone']
 
         ec2 = boto3.resource(service_name='ec2', region_name=self.region)
         client = ec2.meta.client
 
         response = client.describe_instance_attribute(
-            InstanceId=self.master_instance.id,
+            InstanceId=self.controller_instance.id,
             Attribute='instanceInitiatedShutdownBehavior'
         )
         instance_initiated_shutdown_behavior = response['InstanceInitiatedShutdownBehavior']['Value']
 
         response = client.describe_instance_attribute(
-            InstanceId=self.master_instance.id,
+            InstanceId=self.controller_instance.id,
             Attribute='userData'
         )
         if not response['UserData']:
@@ -282,60 +282,60 @@ class EC2Cluster(FlintrockCluster):
                 .decode('utf-8')
             )
 
-        if not self.master_instance.iam_instance_profile:
+        if not self.controller_instance.iam_instance_profile:
             instance_profile_arn = ''
         else:
-            instance_profile_arn = self.master_instance.iam_instance_profile['Arn']
+            instance_profile_arn = self.controller_instance.iam_instance_profile['Arn']
 
-        self.add_slaves_check()
+        self.add_workers_check()
         try:
-            new_slave_instances = _create_instances(
-                num_instances=num_slaves,
+            new_worker_instances = _create_instances(
+                num_instances=num_workers,
                 region=self.region,
                 spot_price=spot_price,
-                ami=self.master_instance.image_id,
+                ami=self.controller_instance.image_id,
                 assume_yes=assume_yes,
-                key_name=self.master_instance.key_name,
-                instance_type=self.master_instance.instance_type,
+                key_name=self.controller_instance.key_name,
+                instance_type=self.controller_instance.instance_type,
                 block_device_mappings=block_device_mappings,
                 availability_zone=availability_zone,
-                placement_group=self.master_instance.placement['GroupName'],
-                tenancy=self.master_instance.placement['Tenancy'],
+                placement_group=self.controller_instance.placement['GroupName'],
+                tenancy=self.controller_instance.placement['Tenancy'],
                 security_group_ids=security_group_ids,
-                subnet_id=self.master_instance.subnet_id,
+                subnet_id=self.controller_instance.subnet_id,
                 instance_profile_arn=instance_profile_arn,
-                ebs_optimized=self.master_instance.ebs_optimized,
+                ebs_optimized=self.controller_instance.ebs_optimized,
                 instance_initiated_shutdown_behavior=instance_initiated_shutdown_behavior,
                 user_data=user_data)
 
-            slave_tags = [
-                {'Key': 'flintrock-role', 'Value': 'slave'},
-                {'Key': 'Name', 'Value': '{c}-slave'.format(c=self.name)}]
-            slave_tags += tags
+            worker_tags = [
+                {'Key': 'flintrock-role', 'Value': 'worker'},
+                {'Key': 'Name', 'Value': '{c}-worker'.format(c=self.name)}]
+            worker_tags += tags
 
             (ec2.instances
                 .filter(
                     Filters=[
-                        {'Name': 'instance-id', 'Values': [i.id for i in new_slave_instances]}
+                        {'Name': 'instance-id', 'Values': [i.id for i in new_worker_instances]}
                     ])
-                .create_tags(Tags=slave_tags))
+                .create_tags(Tags=worker_tags))
 
-            existing_slaves = {i.public_ip_address for i in self.slave_instances}
+            existing_workers = {i.public_ip_address for i in self.worker_instances}
 
-            self.slave_instances += new_slave_instances
+            self.worker_instances += new_worker_instances
             self.wait_for_state('running')
 
-            new_slaves = {i.public_ip_address for i in self.slave_instances} - existing_slaves
+            new_workers = {i.public_ip_address for i in self.worker_instances} - existing_workers
 
-            super().add_slaves(
+            super().add_workers(
                 user=user,
                 identity_file=identity_file,
-                new_hosts=new_slaves)
+                new_hosts=new_workers)
         except (Exception, KeyboardInterrupt) as e:
             if isinstance(e, InterruptedEC2Operation):
                 cleanup_instances = e.instances
             else:
-                cleanup_instances = new_slave_instances
+                cleanup_instances = new_worker_instances
             _cleanup_instances(
                 instances=cleanup_instances,
                 assume_yes=assume_yes,
@@ -344,21 +344,21 @@ class EC2Cluster(FlintrockCluster):
             raise
 
     @timeit
-    def remove_slaves(self, *, user: str, identity_file: str, num_slaves: int):
+    def remove_workers(self, *, user: str, identity_file: str, num_workers: int):
         ec2 = boto3.resource(service_name='ec2', region_name=self.region)
 
-        # self.remove_slaves_check() (?)
+        # self.remove_workers_check() (?)
 
         # Remove spot instances first, if any.
         _instances = sorted(
-            self.slave_instances,
+            self.worker_instances,
             key=lambda x: x.instance_lifecycle == 'spot',
             reverse=True)
-        removed_slave_instances, self.slave_instances = \
-            _instances[0:num_slaves], _instances[num_slaves:]
+        removed_worker_instances, self.worker_instances = \
+            _instances[0:num_workers], _instances[num_workers:]
 
         if self.state == 'running':
-            super().remove_slaves(user=user, identity_file=identity_file)
+            super().remove_workers(user=user, identity_file=identity_file)
 
         # TODO: Centralize logic to get Flintrock base security group.
         flintrock_base_group = list(
@@ -369,14 +369,14 @@ class EC2Cluster(FlintrockCluster):
                 ]))[0]
 
         # TODO: Is there a way to do this in one call for all instances?
-        for instance in removed_slave_instances:
+        for instance in removed_worker_instances:
             instance.modify_attribute(
                 Groups=[flintrock_base_group.id])
 
         (ec2.instances
             .filter(
                 Filters=[
-                    {'Name': 'instance-id', 'Values': [i.id for i in removed_slave_instances]}
+                    {'Name': 'instance-id', 'Values': [i.id for i in removed_worker_instances]}
                 ])
             .terminate())
 
@@ -387,10 +387,10 @@ class EC2Cluster(FlintrockCluster):
                 state=self.state)
 
     @timeit
-    def run_command(self, *, master_only, command, user, identity_file):
+    def run_command(self, *, controller_only, command, user, identity_file):
         self.run_command_check()
         super().run_command(
-            master_only=master_only,
+            controller_only=controller_only,
             user=user,
             identity_file=identity_file,
             command=command)
@@ -402,10 +402,10 @@ class EC2Cluster(FlintrockCluster):
                 state=self.state)
 
     @timeit
-    def copy_file(self, *, local_path, remote_path, master_only=False, user, identity_file):
+    def copy_file(self, *, local_path, remote_path, controller_only=False, user, identity_file):
         self.copy_file_check()
         super().copy_file(
-            master_only=master_only,
+            controller_only=controller_only,
             user=user,
             identity_file=identity_file,
             local_path=local_path,
@@ -425,10 +425,10 @@ class EC2Cluster(FlintrockCluster):
         print('  state: {s}'.format(s=self.state))
         print('  node-count: {nc}'.format(nc=len(self.instances)))
         if self.state == 'running':
-            print('  master:', self.master_host if self.num_masters > 0 else '')
+            print('  controller:', self.controller_host if self.num_controllers > 0 else '')
             print(
                 '\n    - '.join(
-                    ['  slaves:'] + (self.slave_hosts if self.num_slaves > 0 else [])))
+                    ['  workers:'] + (self.worker_hosts if self.num_workers > 0 else [])))
         # print('...')
 
 
@@ -783,7 +783,7 @@ def _create_instances(
 def launch(
         *,
         cluster_name,
-        num_slaves,
+        num_workers,
         services,
         assume_yes,
         key_name,
@@ -858,7 +858,7 @@ def launch(
     else:
         instance_profile_arn = ''
 
-    num_instances = num_slaves + 1
+    num_instances = num_workers + 1
     if user_data is not None:
         user_data = user_data.read()
     else:
@@ -884,40 +884,40 @@ def launch(
             instance_initiated_shutdown_behavior=instance_initiated_shutdown_behavior,
             user_data=user_data)
 
-        master_instance = cluster_instances[0]
-        slave_instances = cluster_instances[1:]
+        controller_instance = cluster_instances[0]
+        worker_instances = cluster_instances[1:]
 
-        master_tags = [
-            {'Key': 'flintrock-role', 'Value': 'master'},
-            {'Key': 'Name', 'Value': '{c}-master'.format(c=cluster_name)}]
-        master_tags += tags
-
-        (ec2.instances
-            .filter(
-                Filters=[
-                    {'Name': 'instance-id', 'Values': [master_instance.id]}
-                ])
-            .create_tags(Tags=master_tags))
-
-        slave_tags = [
-            {'Key': 'flintrock-role', 'Value': 'slave'},
-            {'Key': 'Name', 'Value': '{c}-slave'.format(c=cluster_name)}]
-        slave_tags += tags
+        controller_tags = [
+            {'Key': 'flintrock-role', 'Value': 'controller'},
+            {'Key': 'Name', 'Value': '{c}-controller'.format(c=cluster_name)}]
+        controller_tags += tags
 
         (ec2.instances
             .filter(
                 Filters=[
-                    {'Name': 'instance-id', 'Values': [i.id for i in slave_instances]}
+                    {'Name': 'instance-id', 'Values': [controller_instance.id]}
                 ])
-            .create_tags(Tags=slave_tags))
+            .create_tags(Tags=controller_tags))
+
+        worker_tags = [
+            {'Key': 'flintrock-role', 'Value': 'worker'},
+            {'Key': 'Name', 'Value': '{c}-worker'.format(c=cluster_name)}]
+        worker_tags += tags
+
+        (ec2.instances
+            .filter(
+                Filters=[
+                    {'Name': 'instance-id', 'Values': [i.id for i in worker_instances]}
+                ])
+            .create_tags(Tags=worker_tags))
 
         cluster = EC2Cluster(
             name=cluster_name,
             region=region,
             vpc_id=vpc_id,
             ssh_key_pair=generate_ssh_key_pair(),
-            master_instance=master_instance,
-            slave_instances=slave_instances)
+            controller_instance=controller_instance,
+            worker_instances=worker_instances)
 
         cluster.wait_for_state('running')
 
@@ -1038,14 +1038,14 @@ def _get_cluster_name(instance: 'boto3.resources.factory.ec2.Instance') -> str:
             i=instance.id))
 
 
-def _get_cluster_master_slaves(
+def _get_cluster_controller_workers(
         instances: list) -> ('boto3.resources.factory.ec2.Instance', list):
     """
-    Get the master and slave instances from a set of raw EC2 instances representing
+    Get the controller and worker instances from a set of raw EC2 instances representing
     a Flintrock cluster.
     """
-    master_instance = None
-    slave_instances = []
+    controller_instance = None
+    worker_instances = []
 
     for instance in instances:
         if not instance.tags:
@@ -1054,21 +1054,21 @@ def _get_cluster_master_slaves(
             continue
         for tag in instance.tags:
             if tag['Key'] == 'flintrock-role':
-                if tag['Value'] == 'master':
-                    if master_instance is not None:
-                        raise Exception("More than one master found.")
+                if tag['Value'] == 'controller':
+                    if controller_instance is not None:
+                        raise Exception("More than one controller found.")
                     else:
-                        master_instance = instance
+                        controller_instance = instance
                         break
-                elif tag['Value'] == 'slave':
-                    slave_instances.append(instance)
+                elif tag['Value'] == 'worker':
+                    worker_instances.append(instance)
 
-    # if not master_instance:
-    #     print("Warning: No master found.", file=sys.stderr)
-    # elif not slave_instances:
-    #     print("Warning: No slaves found.", file=sys.stderr)
+    # if not controller_instance:
+    #     print("Warning: No controller found.", file=sys.stderr)
+    # elif not worker_instances:
+    #     print("Warning: No workers found.", file=sys.stderr)
 
-    return (master_instance, slave_instances)
+    return (controller_instance, worker_instances)
 
 
 def _compose_cluster(*, name: str, region: str, vpc_id: str, instances: list) -> EC2Cluster:
@@ -1076,14 +1076,14 @@ def _compose_cluster(*, name: str, region: str, vpc_id: str, instances: list) ->
     Compose an EC2Cluster object from a set of raw EC2 instances representing
     a Flintrock cluster.
     """
-    (master_instance, slave_instances) = _get_cluster_master_slaves(instances)
+    (controller_instance, worker_instances) = _get_cluster_controller_workers(instances)
 
     cluster = EC2Cluster(
         name=name,
         region=region,
         vpc_id=vpc_id,
-        master_instance=master_instance,
-        slave_instances=slave_instances)
+        controller_instance=controller_instance,
+        worker_instances=worker_instances)
 
     return cluster
 

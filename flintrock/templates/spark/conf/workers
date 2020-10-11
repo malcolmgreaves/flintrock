@@ -1,1 +1,1 @@
-{slave_private_hosts}
+{worker_private_hosts}

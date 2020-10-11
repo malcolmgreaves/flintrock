@@ -2,7 +2,7 @@
 #   - Default Spark version: https://spark.apache.org/downloads.html
 #   - Default Hadoop version: https://hadoop.apache.org/releases.html
 #   - Default Amazon Linux 2 EBS AMI: https://aws.amazon.com/amazon-linux-2/release-notes/
-#   - Dependencies: https://requires.io/github/nchammas/flintrock/requirements/?branch=master
+#   - Dependencies: https://requires.io/github/nchammas/flintrock/requirements/?branch=controller
 # Run full acceptance tests
 # Update Flintrock version
 #   - flintrock/__init__.py

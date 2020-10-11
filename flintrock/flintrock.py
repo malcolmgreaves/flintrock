@@ -252,7 +252,7 @@ def cli(cli_context, config, provider, debug):
 
 @cli.command()
 @click.argument('cluster-name')
-@click.option('--num-slaves', type=click.IntRange(min=1), required=True)
+@click.option('--num-workers', type=click.IntRange(min=1), required=True)
 @click.option('--install-hdfs/--no-install-hdfs', default=False)
 @click.option('--hdfs-version', default='2.8.5')
 @click.option('--hdfs-download-source',
@@ -320,7 +320,7 @@ def cli(cli_context, config, provider, debug):
 def launch(
         cli_context,
         cluster_name,
-        num_slaves,
+        num_workers,
         install_hdfs,
         hdfs_version,
         hdfs_download_source,
@@ -432,7 +432,7 @@ def launch(
     if provider == 'ec2':
         cluster = ec2.launch(
             cluster_name=cluster_name,
-            num_slaves=num_slaves,
+            num_workers=num_workers,
             services=services,
             assume_yes=assume_yes,
             key_name=ec2_key_name,
@@ -457,7 +457,7 @@ def launch(
     else:
         raise UnsupportedProviderError(provider)
 
-    print("Cluster master: {}".format(cluster.master_host))
+    print("Cluster controller: {}".format(cluster.controller_host))
     print("Login with: flintrock login {}".format(cluster.name))
 
 
@@ -523,14 +523,14 @@ def destroy(cli_context, cluster_name, assume_yes, ec2_region, ec2_vpc_id):
 
 @cli.command()
 @click.argument('cluster-name', required=False)
-@click.option('--master-hostname-only', is_flag=True, default=False)
+@click.option('--controller-hostname-only', is_flag=True, default=False)
 @click.option('--ec2-region', default='us-east-1', show_default=True)
 @click.option('--ec2-vpc-id', default='', help="Leave empty for default VPC.")
 @click.pass_context
 def describe(
         cli_context,
         cluster_name,
-        master_hostname_only,
+        controller_hostname_only,
         ec2_region,
         ec2_vpc_id):
     """
@@ -566,14 +566,14 @@ def describe(
 
     if cluster_name:
         cluster = clusters[0]
-        if master_hostname_only:
-            logger.info(cluster.master_host)
+        if controller_hostname_only:
+            logger.info(cluster.controller_host)
         else:
             cluster.print()
     else:
-        if master_hostname_only:
+        if controller_hostname_only:
             for cluster in sorted(clusters, key=lambda x: x.name):
-                logger.info("{}: {}".format(cluster.name, cluster.master_host))
+                logger.info("{}: {}".format(cluster.name, cluster.controller_host))
         else:
             logger.info("Found {n} cluster{s}{space}{search_area}.".format(
                 n=len(clusters),
@@ -599,7 +599,7 @@ def describe(
 @click.pass_context
 def login(cli_context, cluster_name, ec2_region, ec2_vpc_id, ec2_identity_file, ec2_user):
     """
-    Login to the master of an existing cluster.
+    Login to the controller of an existing cluster.
     """
     provider = cli_context.obj['provider']
 
@@ -624,7 +624,7 @@ def login(cli_context, cluster_name, ec2_region, ec2_vpc_id, ec2_identity_file, 
     else:
         raise UnsupportedProviderError(provider)
 
-    # TODO: Check that master up first and error out cleanly if not
+    # TODO: Check that controller up first and error out cleanly if not
     #       via ClusterInvalidState.
     cluster.login(user=user, identity_file=identity_file)
 
@@ -708,9 +708,9 @@ def stop(cli_context, cluster_name, ec2_region, ec2_vpc_id, assume_yes):
     logger.info("{c} is now stopped.".format(c=cluster_name))
 
 
-@cli.command(name='add-slaves')
+@cli.command(name='add-workers')
 @click.argument('cluster-name')
-@click.option('--num-slaves', type=click.IntRange(min=1), required=True)
+@click.option('--num-workers', type=click.IntRange(min=1), required=True)
 @click.option('--ec2-region', default='us-east-1', show_default=True)
 @click.option('--ec2-vpc-id', default='', help="Leave empty for default VPC.")
 @click.option('--ec2-identity-file',
@@ -726,10 +726,10 @@ def stop(cli_context, cluster_name, ec2_region, ec2_vpc_id, assume_yes):
               help="Additional tags (e.g. 'Key,Value') to assign to the instances. "
                    "You can specify this option multiple times.")
 @click.pass_context
-def add_slaves(
+def add_workers(
         cli_context,
         cluster_name,
-        num_slaves,
+        num_workers,
         ec2_region,
         ec2_vpc_id,
         ec2_identity_file,
@@ -739,10 +739,10 @@ def add_slaves(
         ec2_tags,
         assume_yes):
     """
-    Add slaves to an existing cluster.
+    Add workers to an existing cluster.
 
-    Flintrock will configure new slaves based on information queried
-    automatically from the master.
+    Flintrock will configure new workers based on information queried
+    automatically from the controller.
     """
     provider = cli_context.obj['provider']
 
@@ -770,30 +770,30 @@ def add_slaves(
     else:
         raise UnsupportedProviderError(provider)
 
-    if cluster.num_masters == 0:
+    if cluster.num_controllers == 0:
         raise Error(
-            "Cannot add slaves to cluster '{c}' since it does not "
-            "appear to have a master."
+            "Cannot add workers to cluster '{c}' since it does not "
+            "appear to have a controller."
             .format(
                 c=cluster_name))
 
     cluster.load_manifest(
         user=user,
         identity_file=identity_file)
-    cluster.add_slaves_check()
+    cluster.add_workers_check()
 
     if provider == 'ec2':
-        cluster.add_slaves(
+        cluster.add_workers(
             user=user,
             identity_file=identity_file,
-            num_slaves=num_slaves,
+            num_workers=num_workers,
             assume_yes=assume_yes,
             **provider_options)
 
 
-@cli.command(name='remove-slaves')
+@cli.command(name='remove-workers')
 @click.argument('cluster-name')
-@click.option('--num-slaves', type=click.IntRange(min=1), required=True)
+@click.option('--num-workers', type=click.IntRange(min=1), required=True)
 @click.option('--ec2-region', default='us-east-1', show_default=True)
 @click.option('--ec2-vpc-id', default='', help="Leave empty for default VPC.")
 @click.option('--ec2-user')
@@ -802,17 +802,17 @@ def add_slaves(
               help="Path to SSH .pem file for accessing nodes.")
 @click.option('--assume-yes/--no-assume-yes', default=False)
 @click.pass_context
-def remove_slaves(
+def remove_workers(
         cli_context,
         cluster_name,
-        num_slaves,
+        num_workers,
         ec2_region,
         ec2_vpc_id,
         ec2_user,
         ec2_identity_file,
         assume_yes):
     """
-    Remove slaves from an existing cluster.
+    Remove workers from an existing cluster.
     """
     provider = cli_context.obj['provider']
 
@@ -835,40 +835,40 @@ def remove_slaves(
     else:
         raise UnsupportedProviderError(provider)
 
-    if num_slaves > cluster.num_slaves:
+    if num_workers > cluster.num_workers:
         logger.warning(
-            "Warning: Cluster has {c} slave{cs}. "
-            "You asked to remove {n} slave{ns}."
+            "Warning: Cluster has {c} worker{cs}. "
+            "You asked to remove {n} worker{ns}."
             .format(
-                c=cluster.num_slaves,
-                cs='' if cluster.num_slaves == 1 else 's',
-                n=num_slaves,
-                ns='' if num_slaves == 1 else 's'))
-        num_slaves = cluster.num_slaves
+                c=cluster.num_workers,
+                cs='' if cluster.num_workers == 1 else 's',
+                n=num_workers,
+                ns='' if num_workers == 1 else 's'))
+        num_workers = cluster.num_workers
 
     if not assume_yes:
         cluster.print()
         click.confirm(
-            text=("Are you sure you want to remove {n} slave{s} from this cluster?"
+            text=("Are you sure you want to remove {n} worker{s} from this cluster?"
                   .format(
-                      n=num_slaves,
-                      s='' if num_slaves == 1 else 's')),
+                      n=num_workers,
+                      s='' if num_workers == 1 else 's')),
             abort=True)
 
-    logger.info("Removing {n} slave{s}..."
+    logger.info("Removing {n} worker{s}..."
                 .format(
-                    n=num_slaves,
-                    s='' if num_slaves == 1 else 's'))
-    cluster.remove_slaves(
+                    n=num_workers,
+                    s='' if num_workers == 1 else 's'))
+    cluster.remove_workers(
         user=user,
         identity_file=identity_file,
-        num_slaves=num_slaves)
+        num_workers=num_workers)
 
 
 @cli.command(name='run-command')
 @click.argument('cluster-name')
 @click.argument('command', nargs=-1)
-@click.option('--master-only', help="Run on the master only.", is_flag=True)
+@click.option('--controller-only', help="Run on the controller only.", is_flag=True)
 @click.option('--ec2-region', default='us-east-1', show_default=True)
 @click.option('--ec2-vpc-id', default='', help="Leave empty for default VPC.")
 @click.option('--ec2-identity-file',
@@ -880,7 +880,7 @@ def run_command(
         cli_context,
         cluster_name,
         command,
-        master_only,
+        controller_only,
         ec2_region,
         ec2_vpc_id,
         ec2_identity_file,
@@ -920,11 +920,11 @@ def run_command(
     cluster.run_command_check()
 
     logger.info("Running command on {target}...".format(
-        target="master only" if master_only else "cluster"))
+        target="controller only" if controller_only else "cluster"))
 
     cluster.run_command(
         command=command,
-        master_only=master_only,
+        controller_only=controller_only,
         user=user,
         identity_file=identity_file)
 
@@ -933,7 +933,7 @@ def run_command(
 @click.argument('cluster-name')
 @click.argument('local_path', type=click.Path(exists=True, dir_okay=False))
 @click.argument('remote_path', type=click.Path())
-@click.option('--master-only', help="Copy to the master only.", is_flag=True)
+@click.option('--controller-only', help="Copy to the controller only.", is_flag=True)
 @click.option('--ec2-region', default='us-east-1', show_default=True)
 @click.option('--ec2-vpc-id', default='', help="Leave empty for default VPC.")
 @click.option('--ec2-identity-file',
@@ -947,7 +947,7 @@ def copy_file(
         cluster_name,
         local_path,
         remote_path,
-        master_only,
+        controller_only,
         ec2_region,
         ec2_vpc_id,
         ec2_identity_file,
@@ -993,9 +993,9 @@ def copy_file(
 
     cluster.copy_file_check()
 
-    if not assume_yes and not master_only:
+    if not assume_yes and not controller_only:
         file_size_bytes = os.path.getsize(local_path)
-        num_nodes = len(cluster.slave_ips) + 1  # TODO: cluster.num_nodes
+        num_nodes = len(cluster.worker_ips) + 1  # TODO: cluster.num_nodes
         total_size_bytes = file_size_bytes * num_nodes
 
         if total_size_bytes > 10 ** 6:
@@ -1021,12 +1021,12 @@ def copy_file(
                 abort=True)
 
     logger.info("Copying file to {target}...".format(
-        target="master only" if master_only else "cluster"))
+        target="controller only" if controller_only else "cluster"))
 
     cluster.copy_file(
         local_path=local_path,
         remote_path=remote_path,
-        master_only=master_only,
+        controller_only=controller_only,
         user=user,
         identity_file=identity_file)
 
@@ -1067,8 +1067,8 @@ def config_to_click(config: dict) -> dict:
         'login': ec2_configs,
         'start': ec2_configs,
         'stop': ec2_configs,
-        'add-slaves': ec2_configs,
-        'remove-slaves': ec2_configs,
+        'add-workers': ec2_configs,
+        'remove-workers': ec2_configs,
         'run-command': ec2_configs,
         'copy-file': ec2_configs,
     }

@@ -29,7 +29,7 @@ Here's a quick way to launch a cluster on EC2, assuming you already have an [AWS
 
 ```sh
 flintrock launch test-cluster \
-    --num-slaves 1 \
+    --num-workers 1 \
     --spark-version 2.4.5 \
     --ec2-key-name key_name \
     --ec2-identity-file /path/to/key.pem \
@@ -56,8 +56,8 @@ Other things you can do with Flintrock include:
 ```sh
 flintrock login test-cluster
 flintrock describe test-cluster
-flintrock add-slaves test-cluster --num-slaves 2
-flintrock remove-slaves test-cluster --num-slaves 1
+flintrock add-workers test-cluster --num-workers 2
+flintrock remove-workers test-cluster --num-workers 1
 flintrock run-command test-cluster 'sudo yum install -y package'
 flintrock copy-file test-cluster /local/path /remote/path
 ```
@@ -230,7 +230,7 @@ Flintrock has a clean command-line interface.
 flintrock --help
 flintrock describe
 flintrock destroy --help
-flintrock launch test-cluster --num-slaves 10
+flintrock launch test-cluster --num-workers 10
 ```
 
 ### Configurable CLI Defaults
@@ -255,7 +255,7 @@ services:
     version: 2.4.5
 
 launch:
-  num-slaves: 1
+  num-workers: 1
 
 providers:
   ec2:
@@ -277,7 +277,7 @@ And if you want, you can even override individual options in your config file at
 
 ```sh
 flintrock launch test-cluster \
-    --num-slaves 10 \
+    --num-workers 10 \
     --ec2-instance-type r5.xlarge
 ```
 
@@ -299,9 +299,9 @@ Flintrock is really fast. This is how quickly it can launch fully operational cl
 
 | Cluster Size  | Flintrock Launch Time |  spark-ec2 Launch Time  |
 |---------------|----------------------:|------------------------:|
-| 1 slave       | 2m 06s                |     8m 44s              |
-| 50 slaves     | 2m 30s                |    37m 30s              |
-| 100 slaves    | 2m 42s                | 1h 06m 05s              |
+| 1 worker       | 2m 06s                |     8m 44s              |
+| 50 workers     | 2m 30s                |    37m 30s              |
+| 100 workers    | 2m 42s                | 1h 06m 05s              |
 
 The spark-ec2 launch times are sourced from [SPARK-5189](https://issues.apache.org/jira/browse/SPARK-5189).
 
@@ -345,9 +345,9 @@ As I became a heavy user of spark-ec2, several limitations stood out and became 
 
 Among those limitations, the most frustrating ones were:
 
-* **Slow launches**: spark-ec2 cluster launch times increase linearly with the number of slaves being created. For example, it takes spark-ec2 **[over an hour](https://issues.apache.org/jira/browse/SPARK-5189)** to launch a cluster with 100 slaves. ([SPARK-4325](https://issues.apache.org/jira/browse/SPARK-4325), [SPARK-5189](https://issues.apache.org/jira/browse/SPARK-5189))
+* **Slow launches**: spark-ec2 cluster launch times increase linearly with the number of workers being created. For example, it takes spark-ec2 **[over an hour](https://issues.apache.org/jira/browse/SPARK-5189)** to launch a cluster with 100 workers. ([SPARK-4325](https://issues.apache.org/jira/browse/SPARK-4325), [SPARK-5189](https://issues.apache.org/jira/browse/SPARK-5189))
 * **No support for configuration files**: spark-ec2 does not support reading options from a config file, so users are always forced to type them in at the command line. ([SPARK-925](https://issues.apache.org/jira/browse/SPARK-925))
-* **Un-resizable clusters**: Adding or removing slaves from an existing spark-ec2 cluster is not possible. ([SPARK-2008](https://issues.apache.org/jira/browse/SPARK-2008))
+* **Un-resizable clusters**: Adding or removing workers from an existing spark-ec2 cluster is not possible. ([SPARK-2008](https://issues.apache.org/jira/browse/SPARK-2008))
 * **Custom machine images**: spark-ec2 uses custom machine images, making it difficult for users to bring their own image. And since the process of updating those machine images is not automated, they have not been updated in years. ([SPARK-3821](https://issues.apache.org/jira/browse/SPARK-3821))
 
 I built Flintrock to address all of these shortcomings, which it does.
