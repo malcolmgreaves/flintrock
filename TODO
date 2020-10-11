@@ -1,0 +1,1 @@
+add-back all of the {master,slave} command line flags, but make a deprecation warning for 2.x.x come up
